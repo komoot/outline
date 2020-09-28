@@ -91,13 +91,15 @@ class ApiClient {
     }
 
     let response;
+    // Komoot: Note that we enforce `credentials: "same-origin"`. This is due to the fact that
+    // we need the sending of cookied our cognito authentication to work.
     try {
       response = await fetch(urlToFetch, {
         method,
         body,
         headers,
         redirect: "follow",
-        credentials: CREDENTIALS,
+        credentials: "same-origin",
         cache: "no-cache",
       });
     } catch (err) {

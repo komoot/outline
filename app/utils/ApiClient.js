@@ -83,13 +83,16 @@ class ApiClient {
     }
 
     let response;
+
+    // Note that credentials: "omit" was changed to "same-origin". This is due to the fact that
+    // "omit" prevents sending of cookies, which are needed for our cognito authentication to work.
     try {
       response = await fetch(urlToFetch, {
         method,
         body,
         headers,
         redirect: "follow",
-        credentials: "omit",
+        credentials: "same-origin",
         cache: "no-cache",
       });
     } catch (err) {

@@ -1,6 +1,5 @@
 // @flow
 import format from "date-fns/format";
-import { MoreIcon } from "outline-icons";
 import * as React from "react";
 import { NavLink } from "react-router-dom";
 import styled, { withTheme } from "styled-components";
@@ -11,11 +10,12 @@ import Avatar from "components/Avatar";
 import Flex from "components/Flex";
 import Time from "components/Time";
 import RevisionMenu from "menus/RevisionMenu";
+import { type Theme } from "types";
 
 import { documentHistoryUrl } from "utils/routeHelpers";
 
 type Props = {
-  theme: Object,
+  theme: Theme,
   showMenu: boolean,
   selected: boolean,
   document: Document,
@@ -44,9 +44,7 @@ class RevisionListItem extends React.Component<Props> {
           <StyledRevisionMenu
             document={document}
             revision={revision}
-            label={
-              <MoreIcon color={selected ? theme.white : theme.textTertiary} />
-            }
+            iconColor={selected ? theme.white : theme.textTertiary}
           />
         )}
       </StyledNavLink>

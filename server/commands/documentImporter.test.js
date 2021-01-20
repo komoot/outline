@@ -56,6 +56,25 @@ describe("documentImporter", () => {
     expect(response.title).toEqual("Heading 1");
   });
 
+  it("should convert Confluence Word output to markdown", async () => {
+    const user = await buildUser();
+    const name = "confluence.doc";
+    const file = new File({
+      name,
+      type: "application/msword",
+      path: path.resolve(__dirname, "..", "test", "fixtures", name),
+    });
+
+    const response = await documentImporter({
+      user,
+      file,
+      ip,
+    });
+
+    expect(response.text).toContain("this is a test document");
+    expect(response.title).toEqual("Heading 1");
+  });
+
   it("should load markdown", async () => {
     const user = await buildUser();
     const name = "markdown.md";
@@ -75,9 +94,28 @@ describe("documentImporter", () => {
     expect(response.title).toEqual("Heading 1");
   });
 
-  it("should error with unknown file type", async () => {
+  it("should fallback to extension if mimetype unknown", async () => {
     const user = await buildUser();
     const name = "markdown.md";
+    const file = new File({
+      name,
+      type: "application/octet-stream",
+      path: path.resolve(__dirname, "..", "test", "fixtures", name),
+    });
+
+    const response = await documentImporter({
+      user,
+      file,
+      ip,
+    });
+
+    expect(response.text).toContain("This is a test paragraph");
+    expect(response.title).toEqual("Heading 1");
+  });
+
+  it("should error with unknown file type", async () => {
+    const user = await buildUser();
+    const name = "files.zip";
     const file = new File({
       name,
       type: "executable/zip",

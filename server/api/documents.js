@@ -1,9 +1,14 @@
 // @flow
 import Router from "koa-router";
 import Sequelize from "sequelize";
+import { subtractDate } from "../../shared/utils/date";
 import documentImporter from "../commands/documentImporter";
 import documentMover from "../commands/documentMover";
-import { NotFoundError, InvalidRequestError } from "../errors";
+import {
+  NotFoundError,
+  InvalidRequestError,
+  AuthorizationError,
+} from "../errors";
 import auth from "../middlewares/authentication";
 import {
   Backlink,
@@ -16,6 +21,7 @@ import {
   Star,
   User,
   View,
+  Team,
 } from "../models";
 import policy from "../policies";
 import {
@@ -46,7 +52,12 @@ router.post("documents.list", auth(), pagination(), async (ctx) => {
 
   // always filter by the current team
   const user = ctx.state.user;
-  let where = { teamId: user.teamId };
+  let where = {
+    teamId: user.teamId,
+    archivedAt: {
+      [Op.eq]: null,
+    },
+  };
 
   if (template) {
     where = { ...where, template: true };
@@ -354,24 +365,51 @@ router.post("documents.starred", auth(), pagination(), async (ctx) => {
 });
 
 router.post("documents.drafts", auth(), pagination(), async (ctx) => {
-  let { sort = "updatedAt", direction } = ctx.body;
+  let { collectionId, dateFilter, sort = "updatedAt", direction } = ctx.body;
   if (direction !== "ASC") direction = "DESC";
 
   const user = ctx.state.user;
-  const collectionIds = await user.collectionIds();
+
+  if (collectionId) {
+    ctx.assertUuid(collectionId, "collectionId must be a UUID");
+
+    const collection = await Collection.scope({
+      method: ["withMembership", user.id],
+    }).findByPk(collectionId);
+    authorize(user, "read", collection);
+  }
+
+  const collectionIds = !!collectionId
+    ? [collectionId]
+    : await user.collectionIds();
+
+  const whereConditions = {
+    userId: user.id,
+    collectionId: collectionIds,
+    publishedAt: { [Op.eq]: null },
+    updatedAt: undefined,
+  };
+
+  if (dateFilter) {
+    ctx.assertIn(
+      dateFilter,
+      ["day", "week", "month", "year"],
+      "dateFilter must be one of day,week,month,year"
+    );
+
+    whereConditions.updatedAt = {
+      [Op.gte]: subtractDate(new Date(), dateFilter),
+    };
+  } else {
+    delete whereConditions.updatedAt;
+  }
 
   const collectionScope = { method: ["withCollection", user.id] };
-  const viewScope = { method: ["withViews", user.id] };
   const documents = await Document.scope(
     "defaultScope",
-    collectionScope,
-    viewScope
+    collectionScope
   ).findAll({
-    where: {
-      userId: user.id,
-      collectionId: collectionIds,
-      publishedAt: { [Op.eq]: null },
-    },
+    where: whereConditions,
     order: [[sort, direction]],
     offset: ctx.state.pagination.offset,
     limit: ctx.state.pagination.limit,
@@ -420,6 +458,11 @@ async function loadDocument({ id, shareId, user }) {
 
     if (!share.published) {
       authorize(user, "read", document);
+    }
+
+    const team = await Team.findByPk(document.teamId);
+    if (!team.sharing) {
+      throw new AuthorizationError();
     }
   } else {
     document = await Document.findByPk(id, {
@@ -479,17 +522,26 @@ router.post("documents.restore", auth(), async (ctx) => {
     throw new NotFoundError();
   }
 
+  // Passing collectionId allows restoring to a different collection than the
+  // document was originally within
   if (collectionId) {
     ctx.assertUuid(collectionId, "collectionId must be a uuid");
-    authorize(user, "restore", document);
-
-    const collection = await Collection.scope({
-      method: ["withMembership", user.id],
-    }).findByPk(collectionId);
-    authorize(user, "update", collection);
-
     document.collectionId = collectionId;
   }
+
+  const collection = await Collection.scope({
+    method: ["withMembership", user.id],
+  }).findByPk(document.collectionId);
+
+  // if the collectionId was provided in the request and isn't valid then it will
+  // be caught as a 403 on the authorize call below. Otherwise we're checking here
+  // that the original collection still exists and advising to pass collectionId
+  // if not.
+  if (!collectionId) {
+    ctx.assertPresent(collection, "collectionId is required");
+  }
+
+  authorize(user, "update", collection);
 
   if (document.deletedAt) {
     authorize(user, "restore", document);
@@ -782,7 +834,12 @@ router.post("documents.unstar", auth(), async (ctx) => {
 
 router.post("documents.create", auth(), createDocumentFromContext);
 router.post("documents.import", auth(), async (ctx) => {
+  if (!ctx.is("multipart/form-data")) {
+    throw new InvalidRequestError("Request type must be multipart/form-data");
+  }
+
   const file: any = Object.values(ctx.request.files)[0];
+  ctx.assertPresent(file, "file is required");
 
   const user = ctx.state.user;
   authorize(user, "create", Document);
@@ -865,6 +922,8 @@ router.post("documents.update", auth(), async (ctx) => {
     throw new InvalidRequestError("Document has changed since last revision");
   }
 
+  const previousTitle = document.title;
+
   // Update document
   if (title) document.title = title;
   if (editorVersion) document.editorVersion = editorVersion;
@@ -915,6 +974,21 @@ router.post("documents.update", auth(), async (ctx) => {
       data: {
         autosave,
         done,
+        title: document.title,
+      },
+      ip: ctx.request.ip,
+    });
+  }
+
+  if (document.title !== previousTitle) {
+    Event.add({
+      name: "documents.title_change",
+      documentId: document.id,
+      collectionId: document.collectionId,
+      teamId: document.teamId,
+      actorId: user.id,
+      data: {
+        previousTitle,
         title: document.title,
       },
       ip: ctx.request.ip,

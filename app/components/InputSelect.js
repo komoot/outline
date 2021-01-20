@@ -9,7 +9,8 @@ import { Outline, LabelText } from "./Input";
 const Select = styled.select`
   border: 0;
   flex: 1;
-  padding: 8px 12px;
+  padding: 8px 0;
+  margin: 0 12px;
   outline: none;
   background: none;
   color: ${(props) => props.theme.text};
@@ -20,11 +21,17 @@ const Select = styled.select`
   }
 `;
 
+const Wrapper = styled.label`
+  display: block;
+  max-width: ${(props) => (props.short ? "350px" : "100%")};
+`;
+
 type Option = { label: string, value: string };
 
 export type Props = {
   value?: string,
   label?: string,
+  short?: boolean,
   className?: string,
   labelHidden?: boolean,
   options: Option[],
@@ -43,12 +50,19 @@ class InputSelect extends React.Component<Props> {
   };
 
   render() {
-    const { label, className, labelHidden, options, ...rest } = this.props;
+    const {
+      label,
+      className,
+      labelHidden,
+      options,
+      short,
+      ...rest
+    } = this.props;
 
     const wrappedLabel = <LabelText>{label}</LabelText>;
 
     return (
-      <label>
+      <Wrapper short={short}>
         {label &&
           (labelHidden ? (
             <VisuallyHidden>{wrappedLabel}</VisuallyHidden>
@@ -64,7 +78,7 @@ class InputSelect extends React.Component<Props> {
             ))}
           </Select>
         </Outline>
-      </label>
+      </Wrapper>
     );
   }
 }

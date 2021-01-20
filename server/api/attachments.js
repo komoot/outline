@@ -27,13 +27,15 @@ router.post("attachments.create", auth(), async (ctx) => {
 
   const { user } = ctx.state;
   const s3Key = uuid.v4();
-  const key = `uploads/${user.id}/${s3Key}/${name}`;
   const acl =
     ctx.body.public === undefined
       ? AWS_S3_ACL
       : ctx.body.public
       ? "public-read"
       : "private";
+
+  const bucket = acl === "public-read" ? "public" : "uploads";
+  const key = `${bucket}/${user.id}/${s3Key}/${name}`;
   const credential = makeCredential();
   const longDate = format(new Date(), "YYYYMMDDTHHmmss\\Z");
   const policy = makePolicy(credential, longDate, acl);
@@ -87,6 +89,38 @@ router.post("attachments.create", auth(), async (ctx) => {
         size,
       },
     },
+  };
+});
+
+router.post("attachments.delete", auth(), async (ctx) => {
+  let { id } = ctx.body;
+  ctx.assertPresent(id, "id is required");
+
+  const user = ctx.state.user;
+  const attachment = await Attachment.findByPk(id);
+  if (!attachment) {
+    throw new NotFoundError();
+  }
+
+  if (attachment.documentId) {
+    const document = await Document.findByPk(attachment.documentId, {
+      userId: user.id,
+    });
+    authorize(user, "update", document);
+  }
+
+  authorize(user, "delete", attachment);
+  await attachment.destroy();
+
+  await Event.create({
+    name: "attachments.delete",
+    teamId: user.teamId,
+    userId: user.id,
+    ip: ctx.request.ip,
+  });
+
+  ctx.body = {
+    success: true,
   };
 });
 

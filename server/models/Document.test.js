@@ -1,5 +1,5 @@
 /* eslint-disable flowtype/require-valid-file-annotation */
-import { Document, Revision } from "../models";
+import { Document } from "../models";
 import {
   buildDocument,
   buildCollection,
@@ -10,37 +10,6 @@ import { flushdb } from "../test/support";
 
 beforeEach(() => flushdb());
 beforeEach(jest.resetAllMocks);
-
-describe("#createRevision", () => {
-  test("should create revision on document creation", async () => {
-    const document = await buildDocument();
-
-    document.title = "Changed";
-    await document.save({ autosave: true });
-
-    const amount = await Revision.count({ where: { documentId: document.id } });
-    expect(amount).toBe(1);
-  });
-
-  test("should create revision on document update identical to previous autosave", async () => {
-    const document = await buildDocument();
-
-    document.title = "Changed";
-    await document.save({ autosave: true });
-
-    document.title = "Changed";
-    await document.save();
-
-    const amount = await Revision.count({ where: { documentId: document.id } });
-    expect(amount).toBe(2);
-  });
-
-  test("should not create revision if autosave", async () => {
-    const document = await buildDocument();
-    const amount = await Revision.count({ where: { documentId: document.id } });
-    expect(amount).toBe(1);
-  });
-});
 
 describe("#getSummary", () => {
   test("should strip markdown", async () => {
@@ -302,6 +271,27 @@ describe("#searchForUser", () => {
 describe("#delete", () => {
   test("should soft delete and set last modified", async () => {
     let document = await buildDocument();
+    let user = await buildUser();
+
+    await document.delete(user.id);
+
+    document = await Document.findByPk(document.id, { paranoid: false });
+    expect(document.lastModifiedById).toBe(user.id);
+    expect(document.deletedAt).toBeTruthy();
+  });
+
+  test("should soft delete templates", async () => {
+    let document = await buildDocument({ template: true });
+    let user = await buildUser();
+
+    await document.delete(user.id);
+
+    document = await Document.findByPk(document.id, { paranoid: false });
+    expect(document.lastModifiedById).toBe(user.id);
+    expect(document.deletedAt).toBeTruthy();
+  });
+  test("should soft delete archived", async () => {
+    let document = await buildDocument({ archivedAt: new Date() });
     let user = await buildUser();
 
     await document.delete(user.id);

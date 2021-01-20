@@ -206,6 +206,11 @@ export default class Document extends BaseModel {
 
   @action
   view = () => {
+    // we don't record views for documents in the trash
+    if (this.isDeleted || !this.publishedAt) {
+      return;
+    }
+
     return this.store.rootStore.views.create({ documentId: this.id });
   };
 
@@ -263,7 +268,7 @@ export default class Document extends BaseModel {
   };
 
   move = (collectionId: string, parentDocumentId: ?string) => {
-    return this.store.move(this, collectionId, parentDocumentId);
+    return this.store.move(this.id, collectionId, parentDocumentId);
   };
 
   duplicate = () => {

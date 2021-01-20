@@ -1,6 +1,7 @@
 // @flow
 import { takeRight } from "lodash";
 import { Attachment, Document, User } from "../models";
+import parseAttachmentIds from "../utils/parseAttachmentIds";
 import { getSignedImageUrl } from "../utils/s3";
 import presentUser from "./user";
 
@@ -8,13 +9,9 @@ type Options = {
   isPublic?: boolean,
 };
 
-const attachmentRegex = /!\[.*\]\(\/api\/attachments\.redirect\?id=(?<id>.*)\)/gi;
-
 // replaces attachments.redirect urls with signed/authenticated url equivalents
-async function replaceImageAttachments(text) {
-  const attachmentIds = [...text.matchAll(attachmentRegex)].map(
-    (match) => match.groups && match.groups.id
-  );
+async function replaceImageAttachments(text: string) {
+  const attachmentIds = parseAttachmentIds(text);
 
   for (const id of attachmentIds) {
     const attachment = await Attachment.findByPk(id);

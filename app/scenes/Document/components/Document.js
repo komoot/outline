@@ -7,7 +7,7 @@ import * as React from "react";
 import keydown from "react-keydown";
 import { Prompt, Route, withRouter } from "react-router-dom";
 import type { RouterHistory, Match } from "react-router-dom";
-import styled, { withTheme } from "styled-components";
+import styled from "styled-components";
 import breakpoint from "styled-components-breakpoint";
 
 import AuthStore from "stores/AuthStore";
@@ -30,8 +30,10 @@ import Header from "./Header";
 import KeyboardShortcutsButton from "./KeyboardShortcutsButton";
 import MarkAsViewed from "./MarkAsViewed";
 import References from "./References";
-import { type LocationWithState } from "types";
+import { type LocationWithState, type Theme } from "types";
+import { isCustomDomain } from "utils/domains";
 import { emojiToUrl } from "utils/emoji";
+import { meta } from "utils/keyboard";
 import {
   collectionUrl,
   documentMoveUrl,
@@ -61,7 +63,7 @@ type Props = {
   readOnly: boolean,
   onCreateLink: (title: string) => string,
   onSearchLink: (term: string) => any,
-  theme: Object,
+  theme: Theme,
   auth: AuthStore,
   ui: UiStore,
 };
@@ -79,13 +81,12 @@ class DocumentScene extends React.Component<Props> {
   @observable title: string = this.props.document.title;
   getEditorText: () => string = () => this.props.document.text;
 
-  componentDidMount() {
-    this.updateIsDirty();
-    this.updateBackground();
-  }
-
   componentDidUpdate(prevProps) {
     const { auth, document } = this.props;
+
+    if (prevProps.readOnly && !this.props.readOnly) {
+      this.updateIsDirty();
+    }
 
     if (this.props.readOnly) {
       this.lastRevision = document.revision;
@@ -99,6 +100,7 @@ class DocumentScene extends React.Component<Props> {
           `Document updated by ${document.updatedBy.name}`,
           {
             timeout: 30 * 1000,
+            type: "warning",
             action: {
               text: "Reload",
               onClick: () => {
@@ -115,14 +117,6 @@ class DocumentScene extends React.Component<Props> {
       this.title = document.title;
       this.isDirty = true;
     }
-
-    this.updateBackground();
-  }
-
-  updateBackground() {
-    // ensure the wider page color always matches the theme. This is to
-    // account for share links which don't sit in the wider Layout component
-    window.document.body.style.background = this.props.theme.background;
   }
 
   @keydown("m")
@@ -171,7 +165,7 @@ class DocumentScene extends React.Component<Props> {
     }
   }
 
-  @keydown("meta+shift+p")
+  @keydown(`${meta}+shift+p`)
   onPublish(ev) {
     ev.preventDefault();
     const { document } = this.props;
@@ -179,7 +173,7 @@ class DocumentScene extends React.Component<Props> {
     this.onSave({ publish: true, done: true });
   }
 
-  @keydown("meta+ctrl+h")
+  @keydown(`${meta}+ctrl+h`)
   onToggleTableOfContents(ev) {
     if (!this.props.readOnly) return;
 
@@ -246,7 +240,7 @@ class DocumentScene extends React.Component<Props> {
         this.props.ui.setActiveDocument(savedDocument);
       }
     } catch (err) {
-      this.props.ui.showToast(err.message);
+      this.props.ui.showToast(err.message, { type: "error" });
     } finally {
       this.isSaving = false;
       this.isPublishing = false;
@@ -328,6 +322,12 @@ class DocumentScene extends React.Component<Props> {
     const disableEmbeds =
       (team && team.documentEmbeds === false) || document.embedsDisabled;
 
+    const headings = this.editor.current
+      ? this.editor.current.getHeadings()
+      : [];
+    const showContents =
+      (ui.tocVisible && readOnly) || (isShare && !!headings.length);
+
     return (
       <ErrorBoundary>
         <Background
@@ -379,7 +379,7 @@ class DocumentScene extends React.Component<Props> {
             )}
             <MaxWidth
               archived={document.isArchived}
-              tocVisible={ui.tocVisible && readOnly}
+              showContents={showContents}
               column
               auto
             >
@@ -413,15 +413,7 @@ class DocumentScene extends React.Component<Props> {
               )}
               <React.Suspense fallback={<LoadingPlaceholder />}>
                 <Flex auto={!readOnly}>
-                  {ui.tocVisible && readOnly && (
-                    <Contents
-                      headings={
-                        this.editor.current
-                          ? this.editor.current.getHeadings()
-                          : []
-                      }
-                    />
-                  )}
+                  {showContents && <Contents headings={headings} />}
                   <Editor
                     id={document.id}
                     innerRef={this.editor}
@@ -448,7 +440,7 @@ class DocumentScene extends React.Component<Props> {
                     ui={this.props.ui}
                   />
                 </Flex>
-                {readOnly && !isShare && !revision && (
+                {!isShare && !revision && (
                   <>
                     <MarkAsViewed document={document} />
                     <ReferencesWrapper isOnlyTitle={document.isOnlyTitle}>
@@ -460,7 +452,8 @@ class DocumentScene extends React.Component<Props> {
             </MaxWidth>
           </Container>
         </Background>
-        {isShare ? <Branding /> : <KeyboardShortcutsButton />}
+        {isShare && !isCustomDomain() && <Branding />}
+        {!isShare && <KeyboardShortcutsButton />}
       </ErrorBoundary>
     );
   }
@@ -494,7 +487,8 @@ const MaxWidth = styled(Flex)`
   ${breakpoint("tablet")`	
     padding: 0 24px;
     margin: 4px auto 12px;
-    max-width: calc(48px + ${(props) => (props.tocVisible ? "64em" : "46em")});
+    max-width: calc(48px + ${(props) =>
+      props.showContents ? "64em" : "46em"});
   `};
 
   ${breakpoint("desktopLarge")`
@@ -503,5 +497,5 @@ const MaxWidth = styled(Flex)`
 `;
 
 export default withRouter(
-  inject("ui", "auth", "policies", "revisions")(withTheme(DocumentScene))
+  inject("ui", "auth", "policies", "revisions")(DocumentScene)
 );

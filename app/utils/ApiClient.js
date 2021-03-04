@@ -100,7 +100,7 @@ class ApiClient {
         body,
         headers,
         redirect: "follow",
-        credentials: CREDENTIALS,
+        credentials: "same-origin",
         cache: "no-cache",
       });
     } catch (err) {

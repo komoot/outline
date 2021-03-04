@@ -55,6 +55,17 @@ router.post("users.list", auth(), pagination(), async (ctx) => {
   };
 });
 
+router.post("users.count", auth(), async (ctx) => {
+  const { user } = ctx.state;
+  const counts = await User.getCounts(user.teamId);
+
+  ctx.body = {
+    data: {
+      counts,
+    },
+  };
+});
+
 router.post("users.info", auth(), async (ctx) => {
   ctx.body = {
     data: presentUser(ctx.state.user),
@@ -184,8 +195,9 @@ router.post("users.invite", auth(), async (ctx) => {
   const { invites } = ctx.body;
   ctx.assertPresent(invites, "invites is required");
 
-  const user = ctx.state.user;
-  authorize(user, "invite", User);
+  const { user } = ctx.state;
+  const team = await Team.findByPk(user.teamId);
+  authorize(user, "invite", team);
 
   const response = await userInviter({ user, invites, ip: ctx.request.ip });
 

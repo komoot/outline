@@ -9,6 +9,7 @@ import {
   buildDocument,
 } from "../test/factories";
 import { flushdb, seed } from "../test/support";
+
 const server = new TestServer(app.callback());
 
 beforeEach(() => flushdb());
@@ -106,6 +107,26 @@ describe("#collections.list", () => {
     expect(body.data.length).toEqual(2);
     expect(body.policies.length).toEqual(2);
     expect(body.policies[0].abilities.read).toEqual(true);
+  });
+});
+
+describe("#collections.import", () => {
+  it("should error if no attachmentId is passed", async () => {
+    const user = await buildUser();
+    const res = await server.post("/api/collections.import", {
+      body: {
+        token: user.getJwtToken(),
+      },
+    });
+    expect(res.status).toEqual(400);
+  });
+
+  it("should require authentication", async () => {
+    const res = await server.post("/api/collections.import");
+    const body = await res.json();
+
+    expect(res.status).toEqual(401);
+    expect(body).toMatchSnapshot();
   });
 });
 
@@ -874,6 +895,18 @@ describe("#collections.create", () => {
     expect(body.policies.length).toBe(1);
     expect(body.policies[0].abilities.read).toBeTruthy();
     expect(body.policies[0].abilities.export).toBeTruthy();
+  });
+
+  it("should allow setting sharing to false", async () => {
+    const { user } = await seed();
+    const res = await server.post("/api/collections.create", {
+      body: { token: user.getJwtToken(), name: "Test", sharing: false },
+    });
+    const body = await res.json();
+
+    expect(res.status).toEqual(200);
+    expect(body.data.id).toBeTruthy();
+    expect(body.data.sharing).toBe(false);
   });
 
   it("should return correct policies with private collection", async () => {

@@ -20,13 +20,13 @@ function Archive(props: Props) {
   const { documents } = props;
 
   return (
-    <CenteredContent column auto>
+    <CenteredContent>
       <PageTitle title={t("Archive")} />
       <Heading>{t("Archive")}</Heading>
       <PaginatedDocumentList
         documents={documents.archived}
         fetch={documents.fetchArchived}
-        heading={<Subheading>{t("Documents")}</Subheading>}
+        heading={<Subheading sticky>{t("Documents")}</Subheading>}
         empty={
           <Empty>{t("The document archive is empty at the moment.")}</Empty>
         }

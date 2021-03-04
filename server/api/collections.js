@@ -2,7 +2,7 @@
 import fs from "fs";
 import Router from "koa-router";
 import { ValidationError } from "../errors";
-import { exportCollections } from "../logistics";
+import { exportCollections } from "../exporter";
 import auth from "../middlewares/authentication";
 import {
   Collection,
@@ -12,6 +12,7 @@ import {
   Event,
   User,
   Group,
+  Attachment,
 } from "../models";
 import policy from "../policies";
 import {
@@ -34,6 +35,7 @@ router.post("collections.create", auth(), async (ctx) => {
     name,
     color,
     description,
+    sharing,
     icon,
     sort = Collection.DEFAULT_SORT,
   } = ctx.body;
@@ -55,6 +57,7 @@ router.post("collections.create", auth(), async (ctx) => {
     teamId: user.teamId,
     createdById: user.id,
     private: isPrivate,
+    sharing,
     sort,
   });
 
@@ -93,6 +96,31 @@ router.post("collections.info", auth(), async (ctx) => {
   ctx.body = {
     data: presentCollection(collection),
     policies: presentPolicies(user, [collection]),
+  };
+});
+
+router.post("collections.import", auth(), async (ctx) => {
+  const { type, attachmentId } = ctx.body;
+  ctx.assertIn(type, ["outline"], "type must be one of 'outline'");
+  ctx.assertUuid(attachmentId, "attachmentId is required");
+
+  const user = ctx.state.user;
+  authorize(user, "import", Collection);
+
+  const attachment = await Attachment.findByPk(attachmentId);
+  authorize(user, "read", attachment);
+
+  await Event.create({
+    name: "collections.import",
+    modelId: attachmentId,
+    teamId: user.teamId,
+    actorId: user.id,
+    data: { type },
+    ip: ctx.request.ip,
+  });
+
+  ctx.body = {
+    success: true,
   };
 });
 
@@ -452,7 +480,7 @@ router.post("collections.export_all", auth(), async (ctx) => {
 });
 
 router.post("collections.update", auth(), async (ctx) => {
-  let { id, name, description, icon, color, sort } = ctx.body;
+  let { id, name, description, icon, color, sort, sharing } = ctx.body;
   const isPrivate = ctx.body.private;
 
   if (color) {
@@ -497,6 +525,9 @@ router.post("collections.update", auth(), async (ctx) => {
   }
   if (isPrivate !== undefined) {
     collection.private = isPrivate;
+  }
+  if (sharing !== undefined) {
+    collection.sharing = sharing;
   }
   if (sort !== undefined) {
     collection.sort = sort;

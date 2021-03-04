@@ -9,6 +9,11 @@ const { allow } = policy;
 
 allow(User, "create", Collection);
 
+allow(User, "import", Collection, (actor) => {
+  if (actor.isAdmin) return true;
+  throw new AdminRequiredError();
+});
+
 allow(User, ["read", "export"], Collection, (user, collection) => {
   if (!collection || user.teamId !== collection.teamId) return false;
 
@@ -25,6 +30,29 @@ allow(User, ["read", "export"], Collection, (user, collection) => {
 
     return some(allMemberships, (m) =>
       ["read", "read_write", "maintainer"].includes(m.permission)
+    );
+  }
+
+  return true;
+});
+
+allow(User, "share", Collection, (user, collection) => {
+  if (!collection || user.teamId !== collection.teamId) return false;
+  if (!collection.sharing) return false;
+
+  if (collection.private) {
+    invariant(
+      collection.memberships,
+      "membership should be preloaded, did you forget withMembership scope?"
+    );
+
+    const allMemberships = concat(
+      collection.memberships,
+      collection.collectionGroupMemberships
+    );
+
+    return some(allMemberships, (m) =>
+      ["read_write", "maintainer"].includes(m.permission)
     );
   }
 

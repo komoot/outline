@@ -7,7 +7,7 @@ import { Helmet } from "react-helmet";
 import { withTranslation, type TFunction } from "react-i18next";
 import keydown from "react-keydown";
 import { Switch, Route, Redirect } from "react-router-dom";
-import styled, { withTheme } from "styled-components";
+import styled from "styled-components";
 import breakpoint from "styled-components-breakpoint";
 import AuthStore from "stores/AuthStore";
 import DocumentsStore from "stores/DocumentsStore";
@@ -24,7 +24,6 @@ import Sidebar from "components/Sidebar";
 import SettingsSidebar from "components/Sidebar/Settings";
 import SkipNavContent from "components/SkipNavContent";
 import SkipNavLink from "components/SkipNavLink";
-import { type Theme } from "types";
 import { meta } from "utils/keyboard";
 import {
   homeUrl,
@@ -40,7 +39,6 @@ type Props = {
   auth: AuthStore,
   ui: UiStore,
   notifications?: React.Node,
-  theme: Theme,
   i18n: Object,
   t: TFunction,
 };
@@ -51,22 +49,10 @@ class Layout extends React.Component<Props> {
   @observable redirectTo: ?string;
   @observable keyboardShortcutsOpen: boolean = false;
 
-  constructor(props: Props) {
-    super();
-    this.updateBackground(props);
-  }
-
   componentDidUpdate() {
-    this.updateBackground(this.props);
-
     if (this.redirectTo) {
       this.redirectTo = undefined;
     }
-  }
-
-  updateBackground(props: Props) {
-    // ensure the wider page color always matches the theme
-    window.document.body.style.background = props.theme.background;
   }
 
   @keydown(`${meta}+.`)
@@ -76,7 +62,6 @@ class Layout extends React.Component<Props> {
 
   @keydown("shift+/")
   handleOpenKeyboardShortcuts() {
-    if (this.props.ui.editMode) return;
     this.keyboardShortcutsOpen = true;
   }
 
@@ -86,7 +71,6 @@ class Layout extends React.Component<Props> {
 
   @keydown(["t", "/", `${meta}+k`])
   goToSearch(ev: SyntheticEvent<>) {
-    if (this.props.ui.editMode) return;
     ev.preventDefault();
     ev.stopPropagation();
     this.redirectTo = searchUrl();
@@ -94,7 +78,6 @@ class Layout extends React.Component<Props> {
 
   @keydown("d")
   goToDashboard() {
-    if (this.props.ui.editMode) return;
     this.redirectTo = homeUrl();
   }
 
@@ -102,7 +85,7 @@ class Layout extends React.Component<Props> {
     const { auth, t, ui } = this.props;
     const { user, team } = auth;
     const showSidebar = auth.authenticated && user && team;
-    const sidebarCollapsed = ui.editMode || ui.sidebarCollapsed;
+    const sidebarCollapsed = ui.isEditing || ui.sidebarCollapsed;
 
     if (auth.isSuspended) return <ErrorSuspended />;
     if (this.redirectTo) return <Redirect to={this.redirectTo} push />;
@@ -215,5 +198,5 @@ const Content = styled(Flex)`
 `;
 
 export default withTranslation()<Layout>(
-  inject("auth", "ui", "documents")(withTheme(Layout))
+  inject("auth", "ui", "documents")(Layout)
 );

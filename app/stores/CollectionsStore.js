@@ -1,7 +1,6 @@
 // @flow
 import { concat, filter, last } from "lodash";
-import { computed } from "mobx";
-
+import { computed, action } from "mobx";
 import naturalSort from "shared/utils/naturalSort";
 import Collection from "models/Collection";
 import BaseStore from "./BaseStore";
@@ -88,6 +87,32 @@ export default class CollectionsStore extends BaseStore<Collection> {
     });
   }
 
+  @action
+  import = async (attachmentId: string) => {
+    await client.post("/collections.import", {
+      type: "outline",
+      attachmentId,
+    });
+  };
+
+  async update(params: Object): Promise<Collection> {
+    const result = await super.update(params);
+
+    // If we're changing sharing permissions on the collection then we need to
+    // remove all locally cached policies for documents in the collection as they
+    // are now invalid
+    if (params.sharing !== undefined) {
+      const collection = this.get(params.id);
+      if (collection) {
+        collection.documentIds.forEach((id) => {
+          this.rootStore.policies.remove(id);
+        });
+      }
+    }
+
+    return result;
+  }
+
   getPathForDocument(documentId: string): ?DocumentPath {
     return this.pathsToDocuments.find((path) => path.id === documentId);
   }
@@ -97,12 +122,12 @@ export default class CollectionsStore extends BaseStore<Collection> {
     if (path) return path.title;
   }
 
-  delete(collection: Collection) {
-    super.delete(collection);
+  delete = async (collection: Collection) => {
+    await super.delete(collection);
 
     this.rootStore.documents.fetchRecentlyUpdated();
     this.rootStore.documents.fetchRecentlyViewed();
-  }
+  };
 
   export = () => {
     return client.post("/collections.export_all");

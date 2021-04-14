@@ -156,6 +156,10 @@ class ApiClient {
     }
 
     if (response.status === 403) {
+      if (error.error === "user_suspended") {
+        stores.auth.logout();
+        return;
+      }
       throw new AuthorizationError(error.message);
     }
 

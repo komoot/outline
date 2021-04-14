@@ -107,6 +107,7 @@ export const base = {
   },
 
   depths: {
+    header: 900,
     sidebar: 1000,
     modalOverlay: 2000,
     modal: 3000,
@@ -133,6 +134,7 @@ export const light = {
   sidebarBackground: colors.warmGrey,
   sidebarItemBackground: colors.black10,
   sidebarText: "rgb(78, 92, 110)",
+  sidebarShadow: "rgba(0, 0, 0, 0.2)",
   shadow: "rgba(0, 0, 0, 0.2)",
 
   menuBackground: colors.white,
@@ -192,13 +194,14 @@ export const dark = {
   sidebarBackground: colors.veryDarkBlue,
   sidebarItemBackground: colors.transparent,
   sidebarText: colors.slate,
+  sidebarShadow: "rgba(255, 255, 255, 0.07)",
   shadow: "rgba(0, 0, 0, 0.6)",
 
   menuBorder: lighten(0.1, colors.almostBlack),
   menuBackground: lighten(0.015, colors.almostBlack),
   menuShadow:
     "0 0 0 1px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.08), inset 0 0 1px rgba(255,255,255,.2)",
-  divider: darken(0.2, colors.slate),
+  divider: lighten(0.1, colors.almostBlack),
   titleBarDivider: darken(0.4, colors.slate),
   inputBorder: colors.slateDark,
   inputBorderFocused: colors.slate,
@@ -229,7 +232,7 @@ export const dark = {
   codeBorder: colors.black50,
   codeString: "#3d8fd1",
   embedBorder: colors.black50,
-  horizontalRule: darken(0.2, colors.slate),
+  horizontalRule: lighten(0.1, colors.almostBlack),
 
   noticeInfoBackground: colors.white10,
   noticeInfoText: colors.almostWhite,

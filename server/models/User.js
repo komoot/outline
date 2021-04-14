@@ -7,11 +7,11 @@ import uuid from "uuid";
 import { languages } from "../../shared/i18n";
 import { ValidationError } from "../errors";
 import { sendEmail } from "../mailer";
-import { DataTypes, sequelize, encryptedFields } from "../sequelize";
+import { DataTypes, sequelize, encryptedFields, Op } from "../sequelize";
+import { DEFAULT_AVATAR_HOST } from "../utils/avatars";
 import { publicS3Endpoint, uploadToS3FromUrl } from "../utils/s3";
+import UserAuthentication from "./UserAuthentication";
 import { Star, Team, Collection, NotificationSetting, ApiKey } from ".";
-
-const DEFAULT_AVATAR_HOST = "https://tiley.herokuapp.com";
 
 const User = sequelize.define(
   "user",
@@ -26,9 +26,13 @@ const User = sequelize.define(
     name: DataTypes.STRING,
     avatarUrl: { type: DataTypes.STRING, allowNull: true },
     isAdmin: DataTypes.BOOLEAN,
+    isViewer: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      allowNull: false,
+    },
     service: { type: DataTypes.STRING, allowNull: true },
     serviceId: { type: DataTypes.STRING, allowNull: true, unique: true },
-    slackData: DataTypes.JSONB,
     jwtSecret: encryptedFields().vault("jwtSecret"),
     lastActiveAt: DataTypes.DATE,
     lastActiveIp: { type: DataTypes.STRING, allowNull: true },
@@ -60,11 +64,12 @@ const User = sequelize.define(
           return original;
         }
 
+        const initial = this.name ? this.name[0] : "?";
         const hash = crypto
           .createHash("md5")
           .update(this.email || "")
           .digest("hex");
-        return `${DEFAULT_AVATAR_HOST}/avatar/${hash}/${this.name[0]}.png`;
+        return `${DEFAULT_AVATAR_HOST}/avatar/${hash}/${initial}.png`;
       },
     },
   }
@@ -79,7 +84,12 @@ User.associate = (models) => {
   });
   User.hasMany(models.Document, { as: "documents" });
   User.hasMany(models.View, { as: "views" });
+  User.hasMany(models.UserAuthentication, { as: "authentications" });
   User.belongsTo(models.Team);
+
+  User.addScope("withAuthentications", {
+    include: [{ model: models.UserAuthentication, as: "authentications" }],
+  });
 };
 
 // Instance methods
@@ -87,7 +97,7 @@ User.prototype.collectionIds = async function (options = {}) {
   const collectionStubs = await Collection.scope({
     method: ["withMembership", this.id],
   }).findAll({
-    attributes: ["id", "private"],
+    attributes: ["id", "permission"],
     where: { teamId: this.teamId },
     paranoid: true,
     ...options,
@@ -96,7 +106,8 @@ User.prototype.collectionIds = async function (options = {}) {
   return collectionStubs
     .filter(
       (c) =>
-        !c.private ||
+        c.permission === "read" ||
+        c.permission === "read_write" ||
         c.memberships.length > 0 ||
         c.collectionGroupMemberships.length > 0
     )
@@ -151,10 +162,6 @@ User.prototype.getTransferToken = function () {
 // Returns a temporary token that is only used for logging in from an email
 // It can only be used to sign in once and has a medium length expiry
 User.prototype.getEmailSigninToken = function () {
-  if (this.service && this.service !== "email") {
-    throw new Error("Cannot generate email signin token for OAuth user");
-  }
-
   return JWT.sign(
     { id: this.id, createdAt: new Date().toISOString(), type: "email-signin" },
     this.jwtSecret
@@ -202,13 +209,16 @@ const removeIdentifyingInfo = async (model, options) => {
     where: { userId: model.id },
     transaction: options.transaction,
   });
+  await UserAuthentication.destroy({
+    where: { userId: model.id },
+    transaction: options.transaction,
+  });
 
   model.email = null;
   model.name = "Unknown";
   model.avatarUrl = "";
   model.serviceId = null;
   model.username = null;
-  model.slackData = null;
   model.lastActiveIp = null;
   model.lastSignedInIp = null;
 
@@ -238,13 +248,7 @@ User.beforeSave(uploadAvatar);
 User.beforeCreate(setRandomJwtSecret);
 User.afterCreate(async (user) => {
   const team = await Team.findByPk(user.teamId);
-
-  // From Slack support:
-  // If you wish to contact users at an email address obtained through Slack,
-  // you need them to opt-in through a clear and separate process.
-  if (user.service && user.service !== "slack") {
-    sendEmail("welcome", user.email, { teamUrl: team.url });
-  }
+  sendEmail("welcome", user.email, { teamUrl: team.url });
 });
 
 // By default when a user signs up we subscribe them to email notifications
@@ -267,6 +271,14 @@ User.afterCreate(async (user, options) => {
       },
       transaction: options.transaction,
     }),
+    NotificationSetting.findOrCreate({
+      where: {
+        userId: user.id,
+        teamId: user.teamId,
+        event: "emails.features",
+      },
+      transaction: options.transaction,
+    }),
   ]);
 });
 
@@ -275,6 +287,7 @@ User.getCounts = async function (teamId: string) {
     SELECT 
       COUNT(CASE WHEN "suspendedAt" IS NOT NULL THEN 1 END) as "suspendedCount",
       COUNT(CASE WHEN "isAdmin" = true THEN 1 END) as "adminCount",
+      COUNT(CASE WHEN "isViewer" = true THEN 1 END) as "viewerCount",
       COUNT(CASE WHEN "lastActiveAt" IS NULL THEN 1 END) as "invitedCount",
       COUNT(CASE WHEN "suspendedAt" IS NULL AND "lastActiveAt" IS NOT NULL THEN 1 END) as "activeCount",
       COUNT(*) as count
@@ -293,10 +306,48 @@ User.getCounts = async function (teamId: string) {
   return {
     active: parseInt(counts.activeCount),
     admins: parseInt(counts.adminCount),
+    viewers: parseInt(counts.viewerCount),
     all: parseInt(counts.count),
     invited: parseInt(counts.invitedCount),
     suspended: parseInt(counts.suspendedCount),
   };
+};
+
+User.prototype.demote = async function (
+  teamId: string,
+  to: "Member" | "Viewer"
+) {
+  const res = await User.findAndCountAll({
+    where: {
+      teamId,
+      isAdmin: true,
+      id: {
+        [Op.ne]: this.id,
+      },
+    },
+    limit: 1,
+  });
+
+  if (res.count >= 1) {
+    if (to === "Member") {
+      return this.update({ isAdmin: false, isViewer: false });
+    } else if (to === "Viewer") {
+      return this.update({ isAdmin: false, isViewer: true });
+    }
+  } else {
+    throw new ValidationError("At least one admin is required");
+  }
+};
+
+User.prototype.promote = async function () {
+  return this.update({ isAdmin: true, isViewer: false });
+};
+
+User.prototype.activate = async function () {
+  return this.update({
+    suspendedById: null,
+    suspendedAt: null,
+  });
 };
 
 export default User;

@@ -7,9 +7,9 @@ import { useTranslation } from "react-i18next";
 import styled from "styled-components";
 import Collection from "models/Collection";
 import Document from "models/Document";
-import DropToImport from "components/DropToImport";
 import Fade from "components/Fade";
 import DropCursor from "./DropCursor";
+import DropToImport from "./DropToImport";
 import EditableTitle from "./EditableTitle";
 import SidebarLink from "./SidebarLink";
 import useStores from "hooks/useStores";
@@ -123,7 +123,8 @@ function DocumentLink({
 
   // Draggable
   const [{ isDragging }, drag] = useDrag({
-    item: { type: "document", ...node, depth, active: isActiveDocument },
+    type: "document",
+    item: () => ({ ...node, depth, active: isActiveDocument }),
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
@@ -146,7 +147,7 @@ function DocumentLink({
   // Drop to re-parent
   const [{ isOverReparent, canDropToReparent }, dropToReparent] = useDrop({
     accept: "document",
-    drop: async (item, monitor) => {
+    drop: (item, monitor) => {
       if (monitor.didDrop()) return;
       if (!collection) return;
       documents.move(item.id, collection.id, node.id);
@@ -183,7 +184,7 @@ function DocumentLink({
   // Drop to reorder
   const [{ isOverReorder }, dropToReorder] = useDrop({
     accept: "document",
-    drop: async (item, monitor) => {
+    drop: (item, monitor) => {
       if (!collection) return;
       if (item.id === node.id) return;
 

@@ -3,12 +3,11 @@ import "focus-visible";
 import { createBrowserHistory } from "history";
 import { Provider } from "mobx-react";
 import * as React from "react";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { render } from "react-dom";
 import { Router } from "react-router-dom";
 import { initI18n } from "shared/i18n";
 import stores from "stores";
+import Analytics from "components/Analytics";
 import ErrorBoundary from "components/ErrorBoundary";
 import PageTheme from "components/PageTheme";
 import ScrollToTop from "components/ScrollToTop";
@@ -43,11 +42,11 @@ if ("serviceWorker" in window.navigator) {
 }
 
 if (element) {
-  render(
+  const App = () => (
     <Provider {...stores}>
-      <Theme>
-        <ErrorBoundary>
-          <DndProvider backend={HTML5Backend}>
+      <Analytics>
+        <Theme>
+          <ErrorBoundary>
             <Router history={history}>
               <>
                 <PageTheme />
@@ -57,12 +56,13 @@ if (element) {
                 <Toasts />
               </>
             </Router>
-          </DndProvider>
-        </ErrorBoundary>
-      </Theme>
-    </Provider>,
-    element
+          </ErrorBoundary>
+        </Theme>
+      </Analytics>
+    </Provider>
   );
+
+  render(<App />, element);
 }
 
 window.addEventListener("load", async () => {

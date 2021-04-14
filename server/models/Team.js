@@ -8,13 +8,12 @@ import {
   stripSubdomain,
   RESERVED_SUBDOMAINS,
 } from "../../shared/utils/domains";
-import { ValidationError } from "../errors";
 import { DataTypes, sequelize, Op } from "../sequelize";
+import { generateAvatarUrl } from "../utils/avatars";
 import { publicS3Endpoint, uploadToS3FromUrl } from "../utils/s3";
 
 import Collection from "./Collection";
 import Document from "./Document";
-import User from "./User";
 
 const readFile = util.promisify(fs.readFile);
 
@@ -66,7 +65,6 @@ const Team = sequelize.define(
       allowNull: false,
       defaultValue: true,
     },
-    slackData: DataTypes.JSONB,
   },
   {
     paranoid: true,
@@ -85,7 +83,11 @@ const Team = sequelize.define(
       },
       logoUrl() {
         return (
-          this.avatarUrl || (this.slackData ? this.slackData.image_88 : null)
+          this.avatarUrl ||
+          generateAvatarUrl({
+            id: this.id,
+            name: this.name,
+          })
         );
       },
     },
@@ -96,6 +98,14 @@ Team.associate = (models) => {
   Team.hasMany(models.Collection, { as: "collections" });
   Team.hasMany(models.Document, { as: "documents" });
   Team.hasMany(models.User, { as: "users" });
+  Team.hasMany(models.AuthenticationProvider, {
+    as: "authenticationProviders",
+  });
+  Team.addScope("withAuthenticationProviders", {
+    include: [
+      { model: models.AuthenticationProvider, as: "authenticationProviders" },
+    ],
+  });
 };
 
 const uploadAvatar = async (model) => {
@@ -121,17 +131,21 @@ const uploadAvatar = async (model) => {
   }
 };
 
-Team.prototype.provisionSubdomain = async function (subdomain) {
+Team.prototype.provisionSubdomain = async function (
+  requestedSubdomain: string,
+  options = {}
+) {
   if (this.subdomain) return this.subdomain;
 
+  let subdomain = requestedSubdomain;
   let append = 0;
   while (true) {
     try {
-      await this.update({ subdomain });
+      await this.update({ subdomain }, options);
       break;
     } catch (err) {
       // subdomain was invalid or already used, try again
-      subdomain = `${subdomain}${++append}`;
+      subdomain = `${requestedSubdomain}${++append}`;
     }
   }
 
@@ -156,17 +170,10 @@ Team.prototype.provisionFirstCollection = async function (userId) {
     "Our Editor",
     "What is Outline",
   ];
+
   for (const title of onboardingDocs) {
     const text = await readFile(
-      path.join(
-        __dirname,
-        "..",
-        "..",
-        "..",
-        "server",
-        "onboarding",
-        `${title}.md`
-      ),
+      path.join(process.cwd(), "server", "onboarding", `${title}.md`),
       "utf8"
     );
     const document = await Document.create({
@@ -185,41 +192,18 @@ Team.prototype.provisionFirstCollection = async function (userId) {
   }
 };
 
-Team.prototype.addAdmin = async function (user: User) {
-  return user.update({ isAdmin: true });
-};
-
-Team.prototype.removeAdmin = async function (user: User) {
-  const res = await User.findAndCountAll({
-    where: {
-      teamId: this.id,
-      isAdmin: true,
-      id: {
-        [Op.ne]: user.id,
-      },
-    },
-    limit: 1,
-  });
-  if (res.count >= 1) {
-    return user.update({ isAdmin: false });
-  } else {
-    throw new ValidationError("At least one admin is required");
-  }
-};
-
-Team.prototype.activateUser = async function (user: User, admin: User) {
-  return user.update({
-    suspendedById: null,
-    suspendedAt: null,
-  });
-};
-
 Team.prototype.collectionIds = async function (paranoid: boolean = true) {
   let models = await Collection.findAll({
-    attributes: ["id", "private"],
-    where: { teamId: this.id, private: false },
+    attributes: ["id"],
+    where: {
+      teamId: this.id,
+      permission: {
+        [Op.ne]: null,
+      },
+    },
     paranoid,
   });
+
   return models.map((c) => c.id);
 };
 

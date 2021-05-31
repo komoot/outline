@@ -8,6 +8,7 @@ import * as React from "react";
 import type { RouterHistory, Match } from "react-router-dom";
 import { withRouter } from "react-router-dom";
 import parseDocumentSlug from "shared/utils/parseDocumentSlug";
+import AuthStore from "stores/AuthStore";
 import DocumentsStore from "stores/DocumentsStore";
 import PoliciesStore from "stores/PoliciesStore";
 import RevisionsStore from "stores/RevisionsStore";
@@ -21,11 +22,10 @@ import DocumentComponent from "./Document";
 import HideSidebar from "./HideSidebar";
 import Loading from "./Loading";
 import SocketPresence from "./SocketPresence";
-import { type LocationWithState } from "types";
+import { type LocationWithState, type NavigationNode } from "types";
 import { NotFoundError, OfflineError } from "utils/errors";
 import { matchDocumentEdit, updateDocumentUrl } from "utils/routeHelpers";
 import { isInternalUrl } from "utils/urls";
-
 type Props = {|
   match: Match,
   location: LocationWithState,
@@ -33,12 +33,16 @@ type Props = {|
   documents: DocumentsStore,
   policies: PoliciesStore,
   revisions: RevisionsStore,
+  auth: AuthStore,
   ui: UiStore,
   history: RouterHistory,
 |};
 
+const sharedTreeCache = {};
+
 @observer
 class DataLoader extends React.Component<Props> {
+  @observable sharedTree: ?NavigationNode;
   @observable document: ?Document;
   @observable revision: ?Revision;
   @observable error: ?Error;
@@ -46,6 +50,9 @@ class DataLoader extends React.Component<Props> {
   componentDidMount() {
     const { documents, match } = this.props;
     this.document = documents.getByUrl(match.params.documentSlug);
+    this.sharedTree = this.document
+      ? sharedTreeCache[this.document.id]
+      : undefined;
     this.loadDocument();
   }
 
@@ -57,7 +64,12 @@ class DataLoader extends React.Component<Props> {
       const document = this.document;
       const policy = this.props.policies.get(document.id);
 
-      if (!policy && !this.error) {
+      if (
+        !policy &&
+        !this.error &&
+        this.props.auth.user &&
+        this.props.auth.user.id
+      ) {
         this.loadDocument();
       }
     }
@@ -82,7 +94,7 @@ class DataLoader extends React.Component<Props> {
       // search for exact internal document
       const slug = parseDocumentSlug(term);
       try {
-        const document = await this.props.documents.fetch(slug);
+        const { document } = await this.props.documents.fetch(slug);
         const time = distanceInWordsToNow(document.updatedAt, {
           addSuffix: true,
         });
@@ -152,9 +164,13 @@ class DataLoader extends React.Component<Props> {
     }
 
     try {
-      this.document = await this.props.documents.fetch(documentSlug, {
+      const response = await this.props.documents.fetch(documentSlug, {
         shareId,
       });
+
+      this.document = response.document;
+      this.sharedTree = response.sharedTree;
+      sharedTreeCache[this.document.id] = response.sharedTree;
 
       if (revisionId && revisionId !== "latest") {
         await this.loadRevision();
@@ -242,6 +258,7 @@ class DataLoader extends React.Component<Props> {
           readOnly={!this.isEditing || !abilities.update || document.isArchived}
           onSearchLink={this.onSearchLink}
           onCreateLink={this.onCreateLink}
+          sharedTree={this.sharedTree}
         />
       </SocketPresence>
     );

@@ -1,12 +1,14 @@
 // @flow
-import { rgba } from "polished";
 import * as React from "react";
 import { Portal } from "react-portal";
 import { Menu } from "reakit/Menu";
 import styled from "styled-components";
 import breakpoint from "styled-components-breakpoint";
-import { fadeAndScaleIn, fadeAndSlideIn } from "shared/styles/animations";
-import Fade from "components/Fade";
+import {
+  fadeIn,
+  fadeAndScaleIn,
+  fadeAndSlideIn,
+} from "shared/styles/animations";
 import usePrevious from "hooks/usePrevious";
 
 type Props = {|
@@ -52,9 +54,7 @@ export default function ContextMenu({
       </Menu>
       {(rest.visible || rest.animating) && (
         <Portal>
-          <Fade timing="200ms">
-            <Backdrop />
-          </Fade>
+          <Backdrop />
         </Portal>
       )}
     </>
@@ -62,12 +62,13 @@ export default function ContextMenu({
 }
 
 const Backdrop = styled.div`
+  animation: ${fadeIn} 200ms ease-in-out;
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: ${(props) => props.theme.shadow};
+  background: ${(props) => props.theme.backdrop};
   z-index: ${(props) => props.theme.depths.menu - 1};
 
   ${breakpoint("tablet")`
@@ -84,7 +85,7 @@ const Position = styled.div`
     transform: none !important;
     top: auto !important;
     right: 8px !important;
-    bottom: 8px !important;
+    bottom: 16px !important;
     left: 8px !important;
   `};
 `;
@@ -94,15 +95,12 @@ const Background = styled.div`
   transform-origin: 50% 100%;
   max-width: 100%;
   background: ${(props) => props.theme.menuBackground};
-  border: ${(props) =>
-    props.theme.menuBorder ? `1px solid ${props.theme.menuBorder}` : "none"};
   border-radius: 6px;
   padding: 6px 0;
   min-width: 180px;
   overflow: hidden;
   overflow-y: auto;
   max-height: 75vh;
-  box-shadow: ${(props) => props.theme.menuShadow};
   pointer-events: all;
   font-weight: normal;
 
@@ -115,6 +113,9 @@ const Background = styled.div`
     transform-origin: ${(props) =>
       props.left !== undefined ? "25%" : "75%"} 0;
     max-width: 276px;
-    background: ${(props) => rgba(props.theme.menuBackground, 0.95)};
+    background: ${(props) => props.theme.menuBackground};
+    box-shadow: ${(props) => props.theme.menuShadow};
+    border: ${(props) =>
+      props.theme.menuBorder ? `1px solid ${props.theme.menuBorder}` : "none"};
   `};
 `;

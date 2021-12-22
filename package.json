@@ -117,7 +117,7 @@
     "js-search": "^1.4.2",
     "json-loader": "0.5.4",
     "jsonwebtoken": "^8.5.0",
-    "jszip": "^3.5.0",
+    "jszip": "^3.7.0",
     "koa": "^2.10.0",
     "koa-body": "^4.2.0",
     "koa-compress": "2.0.0",

@@ -3,7 +3,6 @@ const path = require('path');
 const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { RelativeCiAgentWebpackPlugin } = require('@relative-ci/agent');
-const pkg = require("rich-markdown-editor/package.json");
 const WebpackPwaManifest = require("webpack-pwa-manifest");
 const WorkboxPlugin = require("workbox-webpack-plugin");
 
@@ -18,7 +17,7 @@ module.exports = {
   module: {
     rules: [
       {
-       test: /\.js$/,
+       test: /\.[jt]sx?$/,
        loader: 'babel-loader',
        exclude: [
          path.join(__dirname, 'node_modules')
@@ -41,22 +40,22 @@ module.exports = {
     ]
   },
   resolve: {
+    extensions: ['.ts', '.tsx', '.js', '.json'],
     modules: [
       path.resolve(__dirname, 'app'),
       'node_modules'
     ],
-    mainFields: ["browser",  "main"],
     alias: {
-      shared: path.resolve(__dirname, 'shared'),
+      "~": path.resolve(__dirname, 'app'),
+      "@shared": path.resolve(__dirname, 'shared'),
+      "@server": path.resolve(__dirname, 'server'),
+      'boundless-arrow-key-navigation': 'boundless-arrow-key-navigation/build',
+      'boundless-popover': 'boundless-popover/build',
+      'boundless-utils-omit-keys': 'boundless-utils-omit-keys/build',
+      'boundless-utils-uuid': 'boundless-utils-uuid/build'
     }
   },
   plugins: [
-    new webpack.DefinePlugin({
-      EDITOR_VERSION: JSON.stringify(pkg.version)
-    }),
-    new webpack.ProvidePlugin({
-      fetch: 'imports-loader?this=>global!exports-loader?global.fetch!isomorphic-fetch',
-    }),
     new webpack.IgnorePlugin(/unicode\/category\/So/),
     new HtmlWebpackPlugin({
       template: 'server/static/index.html',
@@ -94,14 +93,26 @@ module.exports = {
   optimization: {
     runtimeChunk: 'single',
     moduleIds: 'hashed',
+    chunkIds: 'named',
     splitChunks: {
+      chunks: 'async',
+      minSize: 20000,
+      minChunks: 1,
+      maxAsyncRequests: 30,
+      maxInitialRequests: 30,
+      enforceSizeThreshold: 50000,
       cacheGroups: {
-        vendor: {
+        defaultVendors: {
           test: /[\\/]node_modules[\\/]/,
-          name: 'vendors',
-          chunks: 'initial',
+          priority: -10,
+          reuseExistingChunk: true,
         },
-      },
-    },
+        default: {
+          minChunks: 2,
+          priority: -20,
+          reuseExistingChunk: true,
+        }
+      }
+    }
   }
 };

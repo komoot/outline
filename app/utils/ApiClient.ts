@@ -98,12 +98,8 @@ class ApiClient {
     }
 
     let response;
-<<<<<<< HEAD:app/utils/ApiClient.js
     // Komoot: Note that we enforce `credentials: "same-origin"`. This is due to the fact that
     // we need the sending of cookied our cognito authentication to work.
-=======
-
->>>>>>> 196c59f34cee1aace08b310efb1243e27ae4e360:app/utils/ApiClient.ts
     try {
       response = await fetchWithRetry(urlToFetch, {
         method,

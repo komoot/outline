@@ -97,7 +97,7 @@
     "is-printable-key-event": "^1.0.0",
     "joplin-turndown-plugin-gfm": "^1.0.12",
     "json-loader": "0.5.4",
-    "jsonwebtoken": "^8.5.0",
+    "jsonwebtoken": "^9.0.0",
     "jszip": "^3.7.1",
     "kbar": "0.1.0-beta.26",
     "koa": "^2.10.0",

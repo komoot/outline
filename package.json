@@ -169,7 +169,7 @@
     "reflect-metadata": "^0.1.13",
     "refractor": "^3.5.0",
     "regenerator-runtime": "^0.13.7",
-    "semver": "^7.3.2",
+    "semver": "^7.5.2",
     "sequelize": "^6.29.0",
     "sequelize-cli": "^6.3.0",
     "sequelize-encrypted": "^1.0.0",

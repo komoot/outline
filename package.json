@@ -173,7 +173,7 @@
     "sequelize": "^6.29.0",
     "sequelize-cli": "^6.3.0",
     "sequelize-encrypted": "^1.0.0",
-    "sequelize-typescript": "^2.1.1",
+    "sequelize-typescript": "^2.1.6",
     "slate": "0.45.0",
     "slate-md-serializer": "5.5.4",
     "slug": "^4.0.4",
